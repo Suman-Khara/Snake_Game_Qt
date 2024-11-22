@@ -6,6 +6,7 @@
 #include <QTimer>
 #include <QMouseEvent>
 #include <QKeyEvent>
+#include <QThread>
 #define Delay delay(1)
 QElapsedTimer bombTimer;
 bool nextBomb=false;
@@ -60,6 +61,10 @@ void MainWindow::colorPointRelative(int x, int y, int r, int g, int b) {
 }
 
 void MainWindow::on_New_Game_clicked() {
+     // "SNAKE GAME"
+     renderSnakeGameText();
+    // Inside on_New_Game_clicked function
+
     // Check if level and difficulty are selected
     if (!(ui->Mode_1->isChecked() || ui->Mode_2->isChecked() || ui->Mode_3->isChecked())) {
         ui->Prompt->setText("Select a Level to Start the Game.");
@@ -398,3 +403,66 @@ void MainWindow::updateWatch() {
 
     ui->Stopwatch->setText(timeString);  // Update the label with the new time
 }
+
+void MainWindow::renderSnakeGameText() {
+    QPixmap canvas = ui->workArea->pixmap(Qt::ReturnByValue);
+    QPainter painter(&canvas);
+
+    // Set the font and color for the text
+    QFont font("Arial", 48, QFont::Bold);
+    painter.setFont(font);
+    painter.setPen(QColor(255, 140, 0)); // Orange color
+
+    // Define the text and position
+    QString text = "SNAKE GAME";
+    QRect textRect = painter.boundingRect(0, 0, canvas.width(), canvas.height(), Qt::AlignCenter, text);
+
+    // Convert text to a QImage for pixel-level manipulation
+    QImage textImage(textRect.size(), QImage::Format_ARGB32);
+    textImage.fill(Qt::transparent);
+    QPainter textPainter(&textImage);
+    textPainter.setFont(font);
+    textPainter.setPen(Qt::black);
+    textPainter.drawText(textImage.rect(), Qt::AlignCenter, text);
+    textPainter.end();
+    //"white print"
+    // Draw text pixel by pixel
+    for (int y = 0; y < textImage.height(); ++y) {
+        for (int x = 0; x < textImage.width(); ++x) {
+            if (QColor(textImage.pixel(x, y)).alpha() > 0) { // Only draw non-transparent pixels
+                painter.drawPoint(textRect.left() + x, textRect.top() + y);
+            }
+        }
+        ui->workArea->setPixmap(canvas); // Update canvas
+        QCoreApplication::processEvents(); // Allow UI to update
+        QThread::msleep(10); // Delay for the effect
+    }
+    QFont gameFont("Arial", 48, QFont::Bold);
+    QString gameText = "SNAKE GAME";
+    QRect textBoundingRect = painter.boundingRect(0, 0, canvas.width(), canvas.height(), Qt::AlignCenter, gameText);
+
+    // First, handle the pixel-based text or other drawing effects
+    // Then, after finishing, draw the large text at the end:
+    painter.setPen(Qt::white); // Set text color for the large text
+    painter.setFont(gameFont); // Use the desired font
+    painter.drawText(textBoundingRect, Qt::AlignCenter, gameText);
+    ui->workArea->setPixmap(canvas); // Update canvas with both effects
+
+
+    // Pause for 2 seconds to display the full text
+    QEventLoop loop;
+    QTimer::singleShot(700, &loop, &QEventLoop::quit);
+    loop.exec();
+
+    // Reset canvas pixel by pixel to white
+    for (int y = 0; y < canvas.height(); ++y) {
+        for (int x = 0; x < canvas.width(); ++x) {
+            painter.setPen(Qt::white);
+            painter.drawPoint(x, y);
+        }
+        ui->workArea->setPixmap(canvas); // Update canvas
+        QCoreApplication::processEvents(); // Allow UI to update
+        QThread::msleep(1); // Delay for the effect
+    }
+}
+
