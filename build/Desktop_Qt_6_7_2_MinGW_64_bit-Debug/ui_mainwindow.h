@@ -10,10 +10,12 @@
 #define UI_MAINWINDOW_H
 
 #include <QtCore/QVariant>
+#include <QtGui/QAction>
 #include <QtWidgets/QApplication>
 #include <QtWidgets/QGroupBox>
 #include <QtWidgets/QLabel>
 #include <QtWidgets/QMainWindow>
+#include <QtWidgets/QMenu>
 #include <QtWidgets/QMenuBar>
 #include <QtWidgets/QPushButton>
 #include <QtWidgets/QRadioButton>
@@ -44,6 +46,7 @@ public:
     QRadioButton *Hard;
     QLabel *Bomb;
     QMenuBar *menubar;
+    QMenu *menuSnake_Game;
     QStatusBar *statusbar;
 
     void setupUi(QMainWindow *MainWindow)
@@ -122,10 +125,14 @@ public:
         menubar = new QMenuBar(MainWindow);
         menubar->setObjectName("menubar");
         menubar->setGeometry(QRect(0, 0, 1241, 25));
+        menuSnake_Game = new QMenu(menubar);
+        menuSnake_Game->setObjectName("menuSnake_Game");
         MainWindow->setMenuBar(menubar);
         statusbar = new QStatusBar(MainWindow);
         statusbar->setObjectName("statusbar");
         MainWindow->setStatusBar(statusbar);
+
+        menubar->addAction(menuSnake_Game->menuAction());
 
         retranslateUi(MainWindow);
 
@@ -149,6 +156,7 @@ public:
         Medium->setText(QCoreApplication::translate("MainWindow", "Medium", nullptr));
         Hard->setText(QCoreApplication::translate("MainWindow", "Hard", nullptr));
         Bomb->setText(QCoreApplication::translate("MainWindow", "Bomb", nullptr));
+        menuSnake_Game->setTitle(QCoreApplication::translate("MainWindow", "Snake Game", nullptr));
     } // retranslateUi
 
 };

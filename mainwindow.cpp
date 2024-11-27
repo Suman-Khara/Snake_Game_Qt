@@ -7,9 +7,147 @@
 #include <QMouseEvent>
 #include <QKeyEvent>
 #include <QThread>
+#include <QFile>
+#include <QTextStream>
+#include <QDir>
+#include <QStandardPaths>
+
 #define Delay delay(1)
 QElapsedTimer bombTimer;
 bool nextBomb=false;
+QString filePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/high_scores.txt";
+struct HighScoreEntry {
+    QString name;
+    int score;
+    QString time; // Format: "hh:mm:ss"
+
+    // Comparison for sorting (higher score is better; lower time breaks ties)
+    bool operator<(const HighScoreEntry &other) const {
+        if (score == other.score)
+            return time < other.time; // Lexicographical comparison works for "hh:mm:ss"
+        return score > other.score;
+    }
+};
+
+std::map<QString, std::vector<HighScoreEntry>> highScores; // Key: "Mode-Difficulty"
+
+void MainWindow::initializeHighScoresFile() {
+    QFile file("high_scores.txt");
+    if (!file.exists()) {
+        // Create an empty file if it doesn't exist
+        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+            file.close();
+        }
+    }
+}
+
+void MainWindow::loadHighScores() {
+    qDebug() << "Loading high scores from: " << QFileInfo("high_scores.txt").absoluteFilePath();
+    QFile file("high_scores.txt");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+
+    QTextStream in(&file);
+    highScores.clear();
+
+    while (!in.atEnd()) {
+        QString line = in.readLine();
+        QStringList parts = line.split(',');
+        if (parts.size() == 5) {
+            QString key = parts[0]; // "Mode-Difficulty"
+            HighScoreEntry entry = { parts[1], parts[2].toInt(), parts[3] };
+            highScores[key].push_back(entry);
+        }
+    }
+
+    file.close();
+
+    // Sort the scores
+    for (auto &pair : highScores) {
+        std::sort(pair.second.begin(), pair.second.end());
+        if (pair.second.size() > 5)
+            pair.second.resize(5); // Keep only top 5
+    }
+}
+
+void MainWindow::saveHighScores() {
+    QFile file("high_scores.txt");
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        qDebug() << "Failed to open file for writing: " << file.errorString();
+        return;
+    }
+
+    QTextStream out(&file);
+    for (const auto &pair : highScores) {
+        for (const HighScoreEntry &entry : pair.second) {
+            out << pair.first << ',' << entry.name << ',' << entry.score << ',' << entry.time << '\n';
+        }
+    }
+
+    file.close();
+    qDebug() << "High scores saved successfully!";
+    qDebug() << "Saving high scores to: " << QFileInfo("high_scores.txt").absoluteFilePath();
+}
+
+void MainWindow::closeEvent(QCloseEvent *event) {
+    saveHighScores();
+    QMainWindow::closeEvent(event); // Call base class implementation
+}
+
+void MainWindow::updateHighScores() {
+    // Determine key based on mode and difficulty
+    QString mode = ui->Mode_1->isChecked() ? "Mode_1" : ui->Mode_2->isChecked() ? "Mode_2" : "Mode_3";
+    QString difficulty = ui->Easy->isChecked() ? "Easy" : ui->Medium->isChecked() ? "Medium" : "Hard";
+    QString key = mode + "-" + difficulty;
+
+    // Create the new entry
+    HighScoreEntry newEntry = { playerName, score, ui->Stopwatch->text() };
+
+    // Update the high scores
+    auto &scores = highScores[key];
+    scores.push_back(newEntry);
+    std::sort(scores.begin(), scores.end());
+    if (scores.size() > 5)
+        scores.resize(5);
+
+    // Check rank
+    int rank = -1;
+    for (int i = 0; i < scores.size(); ++i) {
+        if (scores[i].name == playerName && scores[i].score == score && scores[i].time == ui->Stopwatch->text()) {
+            rank = i + 1;
+            break;
+        }
+    }
+
+    // Show rank in congrats label
+    if (rank != -1) {
+        ui->congrats->setText(playerName + " has got rank " + QString::number(rank));
+    }
+
+    // Save high scores
+    saveHighScores();
+
+    // Update rank labels
+    updateRankLabels(key);
+}
+
+void MainWindow::updateRankLabels(const QString &key) {
+    const auto &scores = highScores[key];
+
+    QLabel *rankLabels[] = { ui->rank_1, ui->rank_2, ui->rank_3, ui->rank_4, ui->rank_5 };
+    for (int i = 0; i < 5; ++i) {
+        if (i < scores.size()) {
+            rankLabels[i]->setText(QString("%1. %2 - %3 pts - %4")
+                                       .arg(i + 1)
+                                       .arg(scores[i].name)
+                                       .arg(scores[i].score)
+                                       .arg(scores[i].time));
+        } else {
+            rankLabels[i]->clear();
+        }
+    }
+}
+
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -24,13 +162,17 @@ MainWindow::MainWindow(QWidget *parent)
         canvas.fill(Qt::white);
         ui->workArea->setPixmap(canvas);
     }
-
+    drawTextOnWorkArea("SIMPLE SNAKE GAME", 50, QColor(0, 0, 0));
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &MainWindow::moveSnake);
     timer->start(interval);
 
     gameTimer = new QTimer(this);
     connect(gameTimer, &QTimer::timeout, this, &MainWindow::updateWatch);
+    ui->nameInput->clear();
+    initializeHighScoresFile();
+    loadHighScores();
+    qDebug() << "Current Working Directory: " << QDir::currentPath();
 
 }
 
@@ -61,9 +203,12 @@ void MainWindow::colorPointRelative(int x, int y, int r, int g, int b) {
 }
 
 void MainWindow::on_New_Game_clicked() {
-     // "SNAKE GAME"
-     renderSnakeGameText();
-    // Inside on_New_Game_clicked function
+    // Check if the name field is empty
+    playerName = ui->nameInput->text().trimmed();
+    if (playerName.isEmpty()) {
+        ui->Prompt->setText("Please enter your name to start the game.");
+        return;
+    }
 
     // Check if level and difficulty are selected
     if (!(ui->Mode_1->isChecked() || ui->Mode_2->isChecked() || ui->Mode_3->isChecked())) {
@@ -106,19 +251,6 @@ void MainWindow::on_New_Game_clicked() {
 
     snake.clear();
     snakePoints.clear();
-    for (int i = -2; i < 3; i++) {
-        snake.push_back({i, 0});
-        snakePoints.insert({i, 0});
-        colorPointRelative(i, 0, 0, 0, 0);
-    }
-
-    // Reset game state
-    direction = {0, 0};
-    score = 0;
-    food = {INT_MAX, INT_MAX};
-    bomb = {INT_MAX, INT_MAX};
-    started = 0;
-    elapsedTime = 0;
     ui->Prompt->setText("Rendering Playground");
     if (ui->Mode_2->isChecked()) {
         createMode2();
@@ -126,6 +258,25 @@ void MainWindow::on_New_Game_clicked() {
     else if (ui->Mode_3->isChecked()) {
         createMode3();
     }
+    for (int i = -2; i < 3; i++) {
+        snake.push_back({i, 0});
+        snakePoints.insert({i, 0});
+        colorPointRelative(i, 0, 0, 0, 0);
+        Delay;
+    }
+    // Reset game state
+    direction = {0, 0};
+    score = 0;
+    food = {INT_MAX, INT_MAX};
+    bomb = {INT_MAX, INT_MAX};
+    started = 0;
+    elapsedTime = 0;
+    ui->Bomb->clear();
+    ui->congrats->clear();
+    QString mode = ui->Mode_1->isChecked() ? "Mode_1" : ui->Mode_2->isChecked() ? "Mode_2" : "Mode_3";
+    QString difficulty = ui->Easy->isChecked() ? "Easy" : ui->Medium->isChecked() ? "Medium" : "Hard";
+    QString key = mode + "-" + difficulty;
+    updateRankLabels(key);
     ui->Prompt->setText("Press Enter to Start");
 }
 
@@ -330,6 +481,7 @@ void MainWindow::moveSnake() {
         direction = {0, 0};
         started = -1;
         gameTimer->stop();
+        updateHighScores();
         return;
     }
 
@@ -404,65 +556,24 @@ void MainWindow::updateWatch() {
     ui->Stopwatch->setText(timeString);  // Update the label with the new time
 }
 
-void MainWindow::renderSnakeGameText() {
+void MainWindow::drawTextOnWorkArea(const QString &text, int fontSize, QColor color) {
     QPixmap canvas = ui->workArea->pixmap(Qt::ReturnByValue);
+    if (canvas.isNull()) {
+        canvas = QPixmap(ui->workArea->size());
+        canvas.fill(Qt::white);
+    }
+
     QPainter painter(&canvas);
-
-    // Set the font and color for the text
-    QFont font("Arial", 48, QFont::Bold);
+    painter.setPen(QPen(color));
+    QFont font = painter.font();
+    font.setPointSize(fontSize);
+    font.setBold(true);
     painter.setFont(font);
-    painter.setPen(QColor(255, 140, 0)); // Orange color
 
-    // Define the text and position
-    QString text = "SNAKE GAME";
-    QRect textRect = painter.boundingRect(0, 0, canvas.width(), canvas.height(), Qt::AlignCenter, text);
+    // Center the text on the workArea
+    QRect rect = canvas.rect();
+    painter.drawText(rect, Qt::AlignCenter, text);
 
-    // Convert text to a QImage for pixel-level manipulation
-    QImage textImage(textRect.size(), QImage::Format_ARGB32);
-    textImage.fill(Qt::transparent);
-    QPainter textPainter(&textImage);
-    textPainter.setFont(font);
-    textPainter.setPen(Qt::black);
-    textPainter.drawText(textImage.rect(), Qt::AlignCenter, text);
-    textPainter.end();
-    //"white print"
-    // Draw text pixel by pixel
-    for (int y = 0; y < textImage.height(); ++y) {
-        for (int x = 0; x < textImage.width(); ++x) {
-            if (QColor(textImage.pixel(x, y)).alpha() > 0) { // Only draw non-transparent pixels
-                painter.drawPoint(textRect.left() + x, textRect.top() + y);
-            }
-        }
-        ui->workArea->setPixmap(canvas); // Update canvas
-        QCoreApplication::processEvents(); // Allow UI to update
-        QThread::msleep(10); // Delay for the effect
-    }
-    QFont gameFont("Arial", 48, QFont::Bold);
-    QString gameText = "SNAKE GAME";
-    QRect textBoundingRect = painter.boundingRect(0, 0, canvas.width(), canvas.height(), Qt::AlignCenter, gameText);
-
-    // First, handle the pixel-based text or other drawing effects
-    // Then, after finishing, draw the large text at the end:
-    painter.setPen(Qt::white); // Set text color for the large text
-    painter.setFont(gameFont); // Use the desired font
-    painter.drawText(textBoundingRect, Qt::AlignCenter, gameText);
-    ui->workArea->setPixmap(canvas); // Update canvas with both effects
-
-
-    // Pause for 2 seconds to display the full text
-    QEventLoop loop;
-    QTimer::singleShot(700, &loop, &QEventLoop::quit);
-    loop.exec();
-
-    // Reset canvas pixel by pixel to white
-    for (int y = 0; y < canvas.height(); ++y) {
-        for (int x = 0; x < canvas.width(); ++x) {
-            painter.setPen(Qt::white);
-            painter.drawPoint(x, y);
-        }
-        ui->workArea->setPixmap(canvas); // Update canvas
-        QCoreApplication::processEvents(); // Allow UI to update
-        QThread::msleep(1); // Delay for the effect
-    }
+    painter.end();
+    ui->workArea->setPixmap(canvas);
 }
-

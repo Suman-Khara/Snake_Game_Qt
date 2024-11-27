@@ -19,6 +19,7 @@ public:
     ~MainWindow();
 protected:
     void keyPressEvent(QKeyEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
 private slots:
     void on_New_Game_clicked();
 
@@ -54,5 +55,13 @@ private:
     QVector<QVector<bool>> bitmap;
     double bombProbability=0.3;
     QPoint bomb;
+    //void renderSnakeGameText();
+    void drawTextOnWorkArea(const QString &text, int fontSize, QColor color);
+    QString playerName;
+    void loadHighScores();
+    void saveHighScores();
+    void updateHighScores();
+    void updateRankLabels(const QString &key);
+    void initializeHighScoresFile();
 };
 #endif // MAINWINDOW_H

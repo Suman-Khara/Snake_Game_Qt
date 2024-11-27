@@ -30,73 +30,11 @@
      <string/>
     </property>
    </widget>
-   <widget class="QPushButton" name="New_Game">
-    <property name="geometry">
-     <rect>
-      <x>1030</x>
-      <y>50</y>
-      <width>141</width>
-      <height>29</height>
-     </rect>
-    </property>
-    <property name="font">
-     <font>
-      <pointsize>11</pointsize>
-      <bold>true</bold>
-      <underline>true</underline>
-     </font>
-    </property>
-    <property name="mouseTracking">
-     <bool>false</bool>
-    </property>
-    <property name="text">
-     <string>NEW GAME</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="Prompt">
-    <property name="geometry">
-     <rect>
-      <x>1030</x>
-      <y>100</y>
-      <width>181</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Start New Game</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="Score">
-    <property name="geometry">
-     <rect>
-      <x>1030</x>
-      <y>160</y>
-      <width>181</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Score</string>
-    </property>
-   </widget>
-   <widget class="QLabel" name="Stopwatch">
-    <property name="geometry">
-     <rect>
-      <x>1030</x>
-      <y>270</y>
-      <width>181</width>
-      <height>20</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>Time</string>
-    </property>
-   </widget>
    <widget class="QGroupBox" name="Mode">
     <property name="geometry">
      <rect>
-      <x>1010</x>
-      <y>350</y>
+      <x>940</x>
+      <y>20</y>
       <width>140</width>
       <height>143</height>
      </rect>
@@ -131,8 +69,8 @@
    <widget class="QGroupBox" name="Difficulty">
     <property name="geometry">
      <rect>
-      <x>1030</x>
-      <y>520</y>
+      <x>1080</x>
+      <y>20</y>
       <width>140</width>
       <height>143</height>
      </rect>
@@ -164,18 +102,147 @@
      </item>
     </layout>
    </widget>
-   <widget class="QLabel" name="Bomb">
+   <widget class="QGroupBox" name="groupBox">
     <property name="geometry">
      <rect>
-      <x>1020</x>
-      <y>220</y>
-      <width>151</width>
-      <height>20</height>
+      <x>1010</x>
+      <y>170</y>
+      <width>153</width>
+      <height>106</height>
      </rect>
     </property>
-    <property name="text">
-     <string>Bomb</string>
+    <property name="title">
+     <string>Gamer Name</string>
     </property>
+    <layout class="QVBoxLayout" name="verticalLayout_3">
+     <item>
+      <widget class="QLabel" name="label">
+       <property name="text">
+        <string>Enter Your Name</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLineEdit" name="nameInput"/>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_2">
+    <property name="geometry">
+     <rect>
+      <x>942</x>
+      <y>510</y>
+      <width>291</width>
+      <height>251</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Leaderboard</string>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_4">
+     <item>
+      <widget class="QLabel" name="rank_1">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="rank_2">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="rank_3">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="rank_4">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="rank_5">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="congrats">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QGroupBox" name="groupBox_3">
+    <property name="geometry">
+     <rect>
+      <x>936</x>
+      <y>280</y>
+      <width>291</width>
+      <height>221</height>
+     </rect>
+    </property>
+    <property name="title">
+     <string>Game</string>
+    </property>
+    <layout class="QVBoxLayout" name="verticalLayout_5">
+     <item>
+      <widget class="QPushButton" name="New_Game">
+       <property name="font">
+        <font>
+         <pointsize>11</pointsize>
+         <bold>true</bold>
+         <underline>true</underline>
+        </font>
+       </property>
+       <property name="mouseTracking">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>NEW GAME</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="Prompt">
+       <property name="text">
+        <string>Start New Game</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="Score">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="Bomb">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="Stopwatch">
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
