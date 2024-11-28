@@ -11,18 +11,19 @@
 #include <QTextStream>
 #include <QDir>
 #include <QStandardPaths>
+#include <fstream>
+#include <sstream>
 
 #define Delay delay(1)
 QElapsedTimer bombTimer;
-bool nextBomb=false;
-QString filePath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/high_scores.txt";
+bool nextBomb = false;
 struct HighScoreEntry {
     QString name;
     int score;
     QString time; // Format: "hh:mm:ss"
 
     // Comparison for sorting (higher score is better; lower time breaks ties)
-    bool operator<(const HighScoreEntry &other) const {
+    bool operator<(const HighScoreEntry& other) const {
         if (score == other.score)
             return time < other.time; // Lexicographical comparison works for "hh:mm:ss"
         return score > other.score;
@@ -32,85 +33,86 @@ struct HighScoreEntry {
 std::map<QString, std::vector<HighScoreEntry>> highScores; // Key: "Mode-Difficulty"
 
 void MainWindow::initializeHighScoresFile() {
-    QFile file("high_scores.txt");
-    if (!file.exists()) {
-        // Create an empty file if it doesn't exist
-        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            file.close();
-        }
+    const QString filePath = "high_scores.txt";
+
+    // Check if the file exists
+    std::ifstream file(filePath.toStdString());
+    if (!file.is_open()) {
+        // Create the file if it does not exist
+        std::ofstream newFile(filePath.toStdString());
+        newFile.close();
+        qDebug() << "High scores file created at:" << QFileInfo(filePath).absoluteFilePath();
+    }
+    else {
+        file.close();
+        qDebug() << "High scores file already exists at:" << QFileInfo(filePath).absoluteFilePath();
     }
 }
 
 void MainWindow::loadHighScores() {
-    qDebug() << "Loading high scores from: " << QFileInfo("high_scores.txt").absoluteFilePath();
-    QFile file("high_scores.txt");
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+    std::ifstream file("high_scores.txt");
+    if (!file.is_open())
         return;
 
-    QTextStream in(&file);
     highScores.clear();
 
-    while (!in.atEnd()) {
-        QString line = in.readLine();
-        QStringList parts = line.split(',');
-        if (parts.size() == 5) {
-            QString key = parts[0]; // "Mode-Difficulty"
-            HighScoreEntry entry = { parts[1], parts[2].toInt(), parts[3] };
-            highScores[key].push_back(entry);
+    std::string line;
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string modeDifficulty, name, scoreStr, time;
+        if (std::getline(ss, modeDifficulty, ',') &&
+            std::getline(ss, name, ',') &&
+            std::getline(ss, scoreStr, ',') &&
+            std::getline(ss, time)) {
+
+            HighScoreEntry entry = { QString::fromStdString(name),
+                                    std::stoi(scoreStr),
+                                    QString::fromStdString(time) };
+
+            highScores[QString::fromStdString(modeDifficulty)].push_back(entry);
         }
     }
 
     file.close();
 
-    // Sort the scores
-    for (auto &pair : highScores) {
+    // Sort scores
+    for (auto& pair : highScores) {
         std::sort(pair.second.begin(), pair.second.end());
         if (pair.second.size() > 5)
-            pair.second.resize(5); // Keep only top 5
+            pair.second.resize(5); // Keep top 5
     }
 }
 
 void MainWindow::saveHighScores() {
-    QFile file("high_scores.txt");
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        qDebug() << "Failed to open file for writing: " << file.errorString();
+    std::ofstream file("high_scores.txt");
+    if (!file.is_open())
         return;
-    }
 
-    QTextStream out(&file);
-    for (const auto &pair : highScores) {
-        for (const HighScoreEntry &entry : pair.second) {
-            out << pair.first << ',' << entry.name << ',' << entry.score << ',' << entry.time << '\n';
+    for (const auto& pair : highScores) {
+        const std::string modeDifficulty = pair.first.toStdString();
+        for (const HighScoreEntry& entry : pair.second) {
+            file << modeDifficulty << ","
+                << entry.name.toStdString() << ","
+                << entry.score << ","
+                << entry.time.toStdString() << "\n";
         }
     }
 
     file.close();
-    qDebug() << "High scores saved successfully!";
-    qDebug() << "Saving high scores to: " << QFileInfo("high_scores.txt").absoluteFilePath();
-}
-
-void MainWindow::closeEvent(QCloseEvent *event) {
-    saveHighScores();
-    QMainWindow::closeEvent(event); // Call base class implementation
 }
 
 void MainWindow::updateHighScores() {
-    // Determine key based on mode and difficulty
     QString mode = ui->Mode_1->isChecked() ? "Mode_1" : ui->Mode_2->isChecked() ? "Mode_2" : "Mode_3";
     QString difficulty = ui->Easy->isChecked() ? "Easy" : ui->Medium->isChecked() ? "Medium" : "Hard";
     QString key = mode + "-" + difficulty;
 
-    // Create the new entry
     HighScoreEntry newEntry = { playerName, score, ui->Stopwatch->text() };
-
-    // Update the high scores
-    auto &scores = highScores[key];
+    auto& scores = highScores[key];
     scores.push_back(newEntry);
     std::sort(scores.begin(), scores.end());
     if (scores.size() > 5)
         scores.resize(5);
 
-    // Check rank
     int rank = -1;
     for (int i = 0; i < scores.size(); ++i) {
         if (scores[i].name == playerName && scores[i].score == score && scores[i].time == ui->Stopwatch->text()) {
@@ -119,36 +121,33 @@ void MainWindow::updateHighScores() {
         }
     }
 
-    // Show rank in congrats label
     if (rank != -1) {
         ui->congrats->setText(playerName + " has got rank " + QString::number(rank));
     }
 
-    // Save high scores
     saveHighScores();
-
-    // Update rank labels
     updateRankLabels(key);
 }
 
-void MainWindow::updateRankLabels(const QString &key) {
-    const auto &scores = highScores[key];
+void MainWindow::updateRankLabels(const QString& key) {
+    const auto& scores = highScores[key];
 
-    QLabel *rankLabels[] = { ui->rank_1, ui->rank_2, ui->rank_3, ui->rank_4, ui->rank_5 };
+    QLabel* rankLabels[] = { ui->rank_1, ui->rank_2, ui->rank_3, ui->rank_4, ui->rank_5 };
     for (int i = 0; i < 5; ++i) {
         if (i < scores.size()) {
             rankLabels[i]->setText(QString("%1. %2 - %3 pts - %4")
-                                       .arg(i + 1)
-                                       .arg(scores[i].name)
-                                       .arg(scores[i].score)
-                                       .arg(scores[i].time));
-        } else {
+                .arg(i + 1)
+                .arg(scores[i].name)
+                .arg(scores[i].score)
+                .arg(scores[i].time));
+        }
+        else {
             rankLabels[i]->clear();
         }
     }
 }
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
 {
@@ -162,7 +161,8 @@ MainWindow::MainWindow(QWidget *parent)
         canvas.fill(Qt::white);
         ui->workArea->setPixmap(canvas);
     }
-    drawTextOnWorkArea("SIMPLE SNAKE GAME", 50, QColor(0, 0, 0));
+    // drawTextOnWorkArea("SIMPLE SNAKE GAME", 50, QColor(0, 0, 0));
+    QTimer::singleShot(0, this, &MainWindow::renderSnakeGameText);
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &MainWindow::moveSnake);
     timer->start(interval);
@@ -172,8 +172,7 @@ MainWindow::MainWindow(QWidget *parent)
     ui->nameInput->clear();
     initializeHighScoresFile();
     loadHighScores();
-    qDebug() << "Current Working Directory: " << QDir::currentPath();
-
+    //qDebug() << "Current Working Directory: " << QDir::currentPath();
 }
 
 MainWindow::~MainWindow()
@@ -181,7 +180,7 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::delay(int ms){
+void MainWindow::delay(int ms) {
     QEventLoop loop;
     QTimer::singleShot(ms, &loop, &QEventLoop::quit);
     loop.exec();
@@ -224,9 +223,11 @@ void MainWindow::on_New_Game_clicked() {
     int interval = 0;
     if (ui->Easy->isChecked()) {
         interval = 85;
-    } else if (ui->Medium->isChecked()) {
+    }
+    else if (ui->Medium->isChecked()) {
         interval = 70;
-    } else if (ui->Hard->isChecked()) {
+    }
+    else if (ui->Hard->isChecked()) {
         interval = 55;
     }
 
@@ -259,16 +260,16 @@ void MainWindow::on_New_Game_clicked() {
         createMode3();
     }
     for (int i = -2; i < 3; i++) {
-        snake.push_back({i, 0});
-        snakePoints.insert({i, 0});
+        snake.push_back({ i, 0 });
+        snakePoints.insert({ i, 0 });
         colorPointRelative(i, 0, 0, 0, 0);
         Delay;
     }
     // Reset game state
-    direction = {0, 0};
+    direction = { 0, 0 };
     score = 0;
-    food = {INT_MAX, INT_MAX};
-    bomb = {INT_MAX, INT_MAX};
+    food = { INT_MAX, INT_MAX };
+    bomb = { INT_MAX, INT_MAX };
     started = 0;
     elapsedTime = 0;
     ui->Bomb->clear();
@@ -425,7 +426,7 @@ void MainWindow::growFood() {
     do {
         x = (rand() % (width / gridOffset)) - (width / (2 * gridOffset));
         y = (rand() % (height / gridOffset)) - (height / (2 * gridOffset));
-    } while (snakePoints.contains({x, y}) || walls.contains({x, y}) || bomb==QPoint(x, y));
+    } while (snakePoints.contains({ x, y }) || walls.contains({ x, y }) || bomb == QPoint(x, y));
 
     food = QPoint(x, y);
     colorPointRelative(x, y, 0, 0, 255);
@@ -442,7 +443,7 @@ void MainWindow::plantBomb() {
         // Generate random coordinates for the bomb
         x = (rand() % (width / gridOffset)) - (width / (2 * gridOffset));
         y = (rand() % (height / gridOffset)) - (height / (2 * gridOffset));
-    } while (snakePoints.contains({x, y}) || walls.contains({x, y}) || QPoint(x, y) == food);
+    } while (snakePoints.contains({ x, y }) || walls.contains({ x, y }) || QPoint(x, y) == food);
 
     // Set the bomb position and color it red
     bomb = QPoint(x, y);
@@ -457,7 +458,7 @@ void MainWindow::moveSnake() {
     if (food == QPoint(INT_MAX, INT_MAX))
         growFood();
 
-    if (bomb == QPoint(INT_MAX, INT_MAX) && !nextBomb){
+    if (bomb == QPoint(INT_MAX, INT_MAX) && !nextBomb) {
         plantBomb();
         ui->Bomb->setText("BOMB ALERT!!!");
     }
@@ -476,24 +477,25 @@ void MainWindow::moveSnake() {
     else if (nextY >= height / (2 * gridOffset))
         nextY = -(height / (2 * gridOffset));
 
-    if (snakePoints.contains({nextX, nextY}) || walls.contains({nextX, nextY}) || bomb == QPoint(nextX, nextY)) {
+    if (snakePoints.contains({ nextX, nextY }) || walls.contains({ nextX, nextY }) || bomb == QPoint(nextX, nextY)) {
         ui->Prompt->setText("Game Over");
-        direction = {0, 0};
+        direction = { 0, 0 };
         started = -1;
         gameTimer->stop();
         updateHighScores();
         return;
     }
 
-    snake.push_back({nextX, nextY});
-    snakePoints.insert({nextX, nextY});
+    snake.push_back({ nextX, nextY });
+    snakePoints.insert({ nextX, nextY });
     colorPointRelative(nextX, nextY, 0, 0, 0);
 
     if (food == QPoint(nextX, nextY)) {
         score += 1;
         ui->Score->setText("Score: " + QString::number(static_cast<int>(score)));
         growFood();
-    } else {
+    }
+    else {
         QPoint tail = snake.front();
         colorPointRelative(tail.x(), tail.y(), 255, 255, 255);
         snake.pop_front();
@@ -504,20 +506,20 @@ void MainWindow::moveSnake() {
     if (bombTimer.elapsed() > 12000 && bomb != QPoint(INT_MAX, INT_MAX) && !nextBomb) { // 5 seconds elapsed
         colorPointRelative(bomb.x(), bomb.y(), 255, 255, 255); // Remove bomb by coloring it white
         bomb = QPoint(INT_MAX, INT_MAX);
-        nextBomb=true;
+        nextBomb = true;
         ui->Bomb->setText("BOMB DIFFUSED.");
     }
-    if(bombTimer.elapsed()>15000 && nextBomb)
+    if (bombTimer.elapsed() > 15000 && nextBomb)
         ui->Bomb->clear();
-    if(bombTimer.elapsed()>20000 && nextBomb)
-        nextBomb=false;
+    if (bombTimer.elapsed() > 20000 && nextBomb)
+        nextBomb = false;
 }
 
-void MainWindow::keyPressEvent(QKeyEvent *event) {
+void MainWindow::keyPressEvent(QKeyEvent* event) {
     int key = event->key();
 
-    if (started == 0 && (key == Qt::Key_Enter || key==Qt::Key_Return)) {
-        direction = {1, 0};
+    if (started == 0 && (key == Qt::Key_Enter || key == Qt::Key_Return)) {
+        direction = { 1, 0 };
         started = 1;
         ui->Prompt->setText("Game Started");
         gameTimer->start(1000);
@@ -527,13 +529,16 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
         QVector<int> newDirection = direction;
 
         if (key == Qt::Key_Right && !(direction[0] == -1 && direction[1] == 0)) {
-            newDirection = {1, 0};
-        } else if (key == Qt::Key_Left && !(direction[0] == 1 && direction[1] == 0)) {
-            newDirection = {-1, 0};
-        } else if (key == Qt::Key_Up && !(direction[0] == 0 && direction[1] == -1)) {
-            newDirection = {0, 1};
-        } else if (key == Qt::Key_Down && !(direction[0] == 0 && direction[1] == 1)) {
-            newDirection = {0, -1};
+            newDirection = { 1, 0 };
+        }
+        else if (key == Qt::Key_Left && !(direction[0] == 1 && direction[1] == 0)) {
+            newDirection = { -1, 0 };
+        }
+        else if (key == Qt::Key_Up && !(direction[0] == 0 && direction[1] == -1)) {
+            newDirection = { 0, 1 };
+        }
+        else if (key == Qt::Key_Down && !(direction[0] == 0 && direction[1] == 1)) {
+            newDirection = { 0, -1 };
         }
 
         if (newDirection != direction) {
@@ -549,14 +554,14 @@ void MainWindow::updateWatch() {
     int seconds = elapsedTime % 60;
 
     QString timeString = QString("%1:%2:%3")
-                             .arg(hours, 2, 10, QChar('0'))
-                             .arg(minutes, 2, 10, QChar('0'))
-                             .arg(seconds, 2, 10, QChar('0'));
+        .arg(hours, 2, 10, QChar('0'))
+        .arg(minutes, 2, 10, QChar('0'))
+        .arg(seconds, 2, 10, QChar('0'));
 
     ui->Stopwatch->setText(timeString);  // Update the label with the new time
 }
 
-void MainWindow::drawTextOnWorkArea(const QString &text, int fontSize, QColor color) {
+void MainWindow::drawTextOnWorkArea(const QString& text, int fontSize, QColor color) {
     QPixmap canvas = ui->workArea->pixmap(Qt::ReturnByValue);
     if (canvas.isNull()) {
         canvas = QPixmap(ui->workArea->size());
@@ -575,5 +580,66 @@ void MainWindow::drawTextOnWorkArea(const QString &text, int fontSize, QColor co
     painter.drawText(rect, Qt::AlignCenter, text);
 
     painter.end();
+    ui->workArea->setPixmap(canvas);
+}
+
+void MainWindow::renderSnakeGameText() {
+    // Retrieve the current canvas
+    QPixmap canvas = ui->workArea->pixmap(Qt::ReturnByValue);
+    if (canvas.isNull()) {
+        canvas = QPixmap(ui->workArea->size());
+        canvas.fill(Qt::white); // Ensure it starts with a white background
+        ui->workArea->setPixmap(canvas);
+    }
+
+    QPainter painter(&canvas);
+
+    // Set the font and color for the text
+    QFont font("Arial", 48, QFont::Bold);
+    painter.setFont(font);
+    painter.setPen(QColor(255, 140, 0)); // Orange color
+
+    // Define the text and calculate its bounding rectangle
+    QString text = "SNAKE GAME";
+    QRect textRect = QRect(0, 0, canvas.width(), canvas.height());
+    QRect centeredRect = painter.boundingRect(textRect, Qt::AlignCenter, text);
+
+    // Convert text to a QImage for pixel-by-pixel rendering
+    QImage textImage(centeredRect.size(), QImage::Format_ARGB32);
+    textImage.fill(Qt::transparent); // Transparent background
+    QPainter textPainter(&textImage);
+    textPainter.setFont(font);
+    textPainter.setPen(Qt::black);
+    textPainter.drawText(textImage.rect(), Qt::AlignCenter, text);
+    textPainter.end();
+
+    // Draw text pixel by pixel with animation
+    for (int y = 0; y < textImage.height(); ++y) {
+        for (int x = 0; x < textImage.width(); ++x) {
+            if (QColor(textImage.pixel(x, y)).alpha() > 0) { // Non-transparent pixels
+                painter.setPen(QColor(255, 140, 0)); // Orange color
+                painter.drawPoint(centeredRect.left() + x, centeredRect.top() + y);
+            }
+        }
+        ui->workArea->setPixmap(canvas); // Update canvas
+        QCoreApplication::processEvents(); // Allow UI updates
+        QThread::msleep(3); // Delay for animation
+    }
+
+    // Display the complete text at once
+    painter.setFont(font);
+    painter.setPen(Qt::white); // Large text in white
+    painter.drawText(centeredRect, Qt::AlignCenter, text);
+    ui->workArea->setPixmap(canvas); // Update canvas
+
+    // Hold the rendered text for 2 seconds
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 2000) {
+        QCoreApplication::processEvents(); // Keep the UI responsive
+    }
+
+    // Clear the canvas for the game to start
+    canvas.fill(Qt::white);
     ui->workArea->setPixmap(canvas);
 }
